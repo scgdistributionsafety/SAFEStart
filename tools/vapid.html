@@ -1,0 +1,12 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>สร้างกุญแจแจ้งเตือน (VAPID)</title>
+<style>body{font:15px system-ui,sans-serif;max-width:720px;margin:auto;padding:24px 16px;line-height:1.6}code,textarea{font:13px ui-monospace,monospace}textarea{width:100%;height:70px}button{font:inherit;padding:10px 16px}</style></head><body>
+<h2>สร้างกุญแจแจ้งเตือนบนเครื่อง (VAPID)</h2>
+<p>กดปุ่มครั้งเดียว ระบบสร้างกุญแจในเครื่องนี้เท่านั้น ไม่ส่งไปที่ไหน · เก็บ <b>Private key</b> เป็นความลับ</p>
+<button id="g">สร้างกุญแจ</button>
+<p><b>Public key</b> → ใส่ใน <code>config.js</code> (VAPID_PUBLIC_KEY) และ Supabase Secret <code>VAPID_PUBLIC_KEY</code></p><textarea id="pub" readonly></textarea>
+<p><b>Private key</b> → ใส่ใน Supabase Secret <code>VAPID_PRIVATE_KEY</code> เท่านั้น</p><textarea id="pri" readonly></textarea>
+<script>
+const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+document.getElementById('g').onclick=async()=>{const k=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+  document.getElementById('pub').value=b64u(await crypto.subtle.exportKey('raw',k.publicKey));document.getElementById('pri').value=(await crypto.subtle.exportKey('jwk',k.privateKey)).d};
+</script></body></html>
