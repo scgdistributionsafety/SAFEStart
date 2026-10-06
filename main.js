@@ -17,8 +17,8 @@ function Login({who,back}){const [e,setE]=useState(lsGet('ss.email')||'');const 
     <div className="row"><span className="ic-circle brand"><${Ic} n=${who==='scg'?'building':'wah'}/></span><div><h2>${who==='scg'?'พนักงาน SCG':'ผู้รับเหมา / หัวหน้าช่าง'}</h2><div className="sm muted">${who==='scg'?'ใช้อีเมลบริษัทที่ Safety Admin เชิญไว้':'ใช้อีเมลที่ผู้ดูแลบริษัทหรือ SCG เชิญไว้ (บัญชีรายคน)'}</div></div></div>
     ${!sent?html`<${Field} label="อีเมล"><${Inp} type="email" v=${e} set=${setE} ph="name@company.com"/></${Field}>
       <${Btn} kind="primary" big=${true} block=${true} disabled=${!/.+@.+\..+/.test(e)} onClick=${send}>ส่งรหัสเข้าสู่ระบบ</${Btn}>`
-    :html`<div className="sm">ส่งรหัส 6 หลักไปที่ <b>${e}</b> แล้ว (หรือกดลิงก์ในอีเมลก็ได้)</div><${Field} label="รหัสจากอีเมล"><${Inp} v=${code} set=${setCode} mode="numeric" max=${6} ph="••••••"/></${Field}>
-      <${Btn} kind="primary" big=${true} block=${true} disabled=${code.trim().length<6} onClick=${verify}>เข้าสู่ระบบ</${Btn}><button className="btn ghost" onClick=${()=>setSent(false)}>เปลี่ยนอีเมล</button>`}
+    :html`<div className="sm">ส่งรหัสไปที่ <b>${e}</b> แล้ว (หรือกดลิงก์ในอีเมลก็ได้)</div><${Field} label="รหัสจากอีเมล"><${Inp} v=${code} set=${setCode} mode="numeric" max=${10} ph="รหัสตัวเลขในอีเมล"/></${Field}>
+      <${Btn} kind="primary" big=${true} block=${true} disabled=${code.trim().length<6||code.trim().length>10} onClick=${verify}>เข้าสู่ระบบ</${Btn}><button className="btn ghost" onClick=${()=>setSent(false)}>เปลี่ยนอีเมล</button>`}
     ${err?html`<div className="sm" style=${{color:'var(--stop)'}}>${err}</div>`:null}
     <div className="xs muted">บทบาทและสิทธิ์มาจากคำเชิญเท่านั้น ปุ่มที่เลือกเปลี่ยนแค่คำแนะนำ</div></div></div>`}
 

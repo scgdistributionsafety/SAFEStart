@@ -179,21 +179,63 @@ function HoldButton({ms,onHold,className,children,label}){const [p,setP]=useStat
 
 /* ---------- รูปภาพ: ย่อ + ประทับเวลา แล้วอัปโหลด ---------- */
 function loadImg(src){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>rej(new Error('เปิดรูปไม่ได้'));im.src=src})}
+/* อ่านเวลาถ่ายและพิกัดจาก EXIF ของรูป JPEG (ถ้ามี) */
+async function readExif(file){try{if(!/jpe?g/i.test(file.type))return{};const b=new DataView(await file.slice(0,262144).arrayBuffer());if(b.getUint16(0)!==0xFFD8)return{};
+  let o=2;while(o<b.byteLength-4){const m=b.getUint16(o),len=b.getUint16(o+2);if(m===0xFFE1&&b.getUint32(o+4)===0x45786966){const t=o+10,le=b.getUint16(t)===0x4949;
+    const u16=x=>b.getUint16(x,le),u32=x=>b.getUint32(x,le);const out={};
+    const ifd=(at,cb)=>{const n=u16(at);for(let i=0;i<n;i++){const e=at+2+i*12;cb(u16(e),u16(e+2),u32(e+4),e+8)}};
+    const str=(off,cnt)=>{let r='';for(let i=0;i<cnt-1;i++)r+=String.fromCharCode(b.getUint8(t+off+i));return r};
+    const rat=(off,i)=>u32(t+off+i*8)/(u32(t+off+i*8+4)||1);
+    let exifAt=0,gpsAt=0;ifd(t+u32(t+4),(tag,ty,c,v)=>{if(tag===0x8769)exifAt=u32(v);if(tag===0x8825)gpsAt=u32(v)});
+    if(exifAt)ifd(t+exifAt,(tag,ty,c,v)=>{if(tag===0x9003){const d=str(u32(v),c).match(/(\d+):(\d+):(\d+) (\d+):(\d+):(\d+)/);if(d)out.time=new Date(+d[1],d[2]-1,+d[3],+d[4],+d[5],+d[6])}});
+    if(gpsAt){const g={};ifd(t+gpsAt,(tag,ty,c,v)=>{if(tag===1||tag===3)g[tag]=String.fromCharCode(b.getUint8(v));if(tag===2||tag===4){const off=u32(v);g[tag]=rat(off,0)+rat(off,1)/60+rat(off,2)/3600}});
+      if(g[2]&&g[4])out.pos={lat:g[1]==='S'?-g[2]:g[2],lng:g[3]==='W'?-g[4]:g[4],src:'exif'}}
+    return out}
+    if((m&0xFF00)!==0xFF00)break;o+=2+len}}catch(e){}return{}}
+/* ตำแหน่งปัจจุบัน (เก็บไว้ใช้ซ้ำ 60 วินาที) */
+let POS=null;
+function currentPos(){if(POS&&Date.now()-POS.at<60000)return Promise.resolve(POS);
+  return new Promise(res=>{if(!navigator.geolocation)return res(null);navigator.geolocation.getCurrentPosition(g=>{POS={lat:g.coords.latitude,lng:g.coords.longitude,acc:Math.round(g.coords.accuracy),at:Date.now()};res(POS)},()=>res(null),{enableHighAccuracy:true,timeout:8000,maximumAge:30000})})}
+/* ชื่อสถานที่จากพิกัด (OpenStreetMap) · ไม่ได้ภายใน 3 วินาทีใช้พิกัดอย่างเดียว */
+const GEO={};
+async function placeName(lat,lng){const k=lat.toFixed(4)+','+lng.toFixed(4);if(k in GEO)return GEO[k];
+  try{const ac=new AbortController();const tm=setTimeout(()=>ac.abort(),3000);
+    const r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=16&accept-language=th&lat='+lat+'&lon='+lng,{signal:ac.signal});clearTimeout(tm);
+    const a=(await r.json()).address||{};const n=[a.road||a.village||a.hamlet||a.neighbourhood,a.suburb||a.subdistrict||a.quarter,a.city_district||a.district||a.county||a.town,a.state||a.province||a.city].filter(Boolean);
+    return GEO[k]=[...new Set(n)].join(' ')||null}catch(e){return GEO[k]=null}}
+const fmtTH=d=>d.toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+/* ข้อความประทับ: เวลาถ่าย + สถานที่ + ข้อมูลงาน */
+async function stampLines(file,extra){
+  const ex=await readExif(file);const now=new Date();
+  let shot=ex.time||(file.lastModified?new Date(file.lastModified):now);if(shot>now)shot=now;
+  const old=now-shot>30*60000;
+  const t=[(old?'ถ่าย ':'ถ่าย ')+fmtTH(shot)+(old?' · อัปโหลด '+now.toLocaleTimeString('th-TH',{timeZone:'Asia/Bangkok',hour:'2-digit',minute:'2-digit'})+' (รูปเก่า/จากคลังภาพ)':'')];
+  const pos=ex.pos||(old?null:await currentPos());
+  if(pos){const nm=await placeName(pos.lat,pos.lng);
+    t.push((nm?nm+' · ':'')+pos.lat.toFixed(5)+', '+pos.lng.toFixed(5)+(pos.acc?' ±'+pos.acc+' ม.':'')+(pos.src==='exif'?' (จากรูป)':''))}
+  else t.push(old?'ไม่ทราบตำแหน่งตอนถ่าย':'ไม่ทราบตำแหน่ง (ไม่ได้อนุญาต Location)');
+  return [...t,...(extra||[]),'SafeStart · '+(ME&&(ME.full_name||ME.email)||'')]}
+function wrapLines(g2,lines,w){const out=[];lines.forEach(l=>{let cur='';for(const ch of String(l)){if(g2.measureText(cur+ch).width>w&&cur){out.push(cur);cur=ch}else cur+=ch}if(cur)out.push(cur)});return out}
 async function stamped(file,max,lines){
   const url=URL.createObjectURL(file);const im=await loadImg(url);URL.revokeObjectURL(url);
   const s=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);
   const g2=c.getContext('2d');g2.drawImage(im,0,0,c.width,c.height);
-  if(lines&&lines.length){const fs=Math.max(12,Math.round(c.width/42));const h=fs*1.45*lines.length+fs*.9;g2.fillStyle='rgba(10,16,28,.62)';g2.fillRect(0,c.height-h,c.width,h);g2.fillStyle='#F4B000';g2.fillRect(0,c.height-h,Math.max(4,fs/3),h);g2.fillStyle='#fff';g2.font=`600 ${fs}px "IBM Plex Sans Thai",sans-serif`;lines.forEach((t,i)=>g2.fillText(t,fs*.9,c.height-h+fs*1.25+i*fs*1.45))}
-  return new Promise(r=>c.toBlob(r,'image/jpeg',.8));
+  if(lines&&lines.length){const fs=Math.max(13,Math.round(Math.min(c.width,c.height*1.3)/36));g2.font=`600 ${fs}px "IBM Plex Sans Thai",sans-serif`;
+    const L=wrapLines(g2,lines,c.width-fs*1.8);const h=fs*1.45*L.length+fs*.9;
+    g2.fillStyle='rgba(10,16,28,.62)';g2.fillRect(0,c.height-h,c.width,h);g2.fillStyle='#F4B000';g2.fillRect(0,c.height-h,Math.max(4,fs/3),h);
+    g2.fillStyle='#fff';L.forEach((t,i)=>{g2.font=`${i===0?700:500} ${fs}px "IBM Plex Sans Thai",sans-serif`;g2.fillText(t,fs*.9,c.height-h+fs*1.25+i*fs*1.45)})}
+  return new Promise(r=>c.toBlob(r,'image/jpeg',.82));
 }
 const URLC={};
 async function signedUrl(path,bucket){if(!path)return null;const k=(bucket||'photos')+'/'+path;const c=URLC[k];if(c&&c.exp>Date.now())return c.url;
   const {data,error}=await sb.storage.from(bucket||'photos').createSignedUrl(path,3600);if(error)return null;URLC[k]={url:data.signedUrl,exp:Date.now()+50*6e4};return data.signedUrl}
-async function uploadPhoto(file,{folder,stamp,bucket}={}){
+async function uploadPhoto(file,{folder,stamp,bucket,camera}={}){
   if(!file)throw new Error('ยังไม่ได้เลือกไฟล์');
   const isPdf=file.type==='application/pdf';if(!isPdf&&!/^image\//.test(file.type))throw new Error('รองรับเฉพาะรูปภาพหรือ PDF');
-  const lines=stamp?[new Date().toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'})+' · SafeStart',...stamp]:null;
-  const body=isPdf?file:await stamped(file,1400,lines);
+  // ประทับเวลาและสถานที่ทุกรูปหน้างาน (ยกเว้นรูปบัตรประชาชนและเอกสารสุขภาพ)
+  const doStamp=!isPdf&&(stamp||camera)&&!['idcheck','health'].includes(bucket);
+  const lines=doStamp?await stampLines(file,stamp):null;
+  const body=isPdf?file:await stamped(file,1600,lines);
   const path=`${folder||ME.contractor_id||'scg'}/${today()}/${uid()}.${isPdf?'pdf':'jpg'}`;
   const {error}=await sb.storage.from(bucket||'photos').upload(path,body,{contentType:isPdf?'application/pdf':'image/jpeg'});
   if(error)throw new Error('อัปโหลดไม่สำเร็จ: '+error.message);return path;
@@ -202,7 +244,7 @@ function Img({path,bucket,cls,alt}){const [src,set]=useState(null);useEffect(()=
   if(!path)return null;if(/\.pdf$/.test(path))return src?html`<a className="btn small" href=${src} target="_blank" rel="noopener">เปิด PDF</a>`:null;
   return src?html`<img className=${cls||'thumb'} src=${src} alt=${alt||'รูปหลักฐาน'} onClick=${()=>UI.zoom(src)}/>`:html`<div className=${cls||'thumb'} aria-hidden="true"></div>`}
 function Upload({label,hint,value,onChange,stamp,camera,accept,bucket,folder,compact}){const [st,setSt]=useState('');
-  const pick=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;setSt('กำลังอัปโหลด…');try{onChange(await uploadPhoto(f,{stamp,bucket,folder}));setSt('')}catch(err){setSt(err.message)}};
+  const pick=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;setSt((stamp||camera)?'กำลังประทับเวลา/สถานที่ และอัปโหลด…':'กำลังอัปโหลด…');try{onChange(await uploadPhoto(f,{stamp,bucket,folder,camera}));setSt('')}catch(err){setSt(err.message)}};
   return html`<div className=${cx('photo',value&&'done',compact&&'compact')}>${value?html`<${Img} path=${value} bucket=${bucket}/>`:html`<div className="ic-circle mute"><${Ic} n="camera"/></div>`}
   <div className="grow"><div style=${{fontWeight:500}}>${label}</div><div className="sm muted">${st||hint||(value?'แนบแล้ว':camera?'ถ่ายจากกล้องหน้างาน':'')}</div></div>
   <label className=${cx('btn small upbtn',!value&&'dark')}>${value?'เปลี่ยน':camera?'ถ่ายรูป':'แนบไฟล์'}<input type="file" accept=${accept||'image/*'} capture=${camera?'environment':undefined} onChange=${pick}/></label></div>`}
