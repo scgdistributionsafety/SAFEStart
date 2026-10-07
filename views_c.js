@@ -275,10 +275,9 @@ function IncidentSheet({job,kind,text}){useStore();const js=visJobs().filter(j=>
   </${Sheet}>`}
 
 /* ---------- ทีมและช่าง (ผู้ดูแลบริษัท) ---------- */
-const W_ST={pending:['warn','รออนุมัติ'],approved:['go','อนุมัติ'],rejected:['stop','ไม่อนุมัติ']};
 const NAT={th:'ไทย',mm:'เมียนมา',kh:'กัมพูชา',la:'ลาว',other:'อื่น ๆ'};
-function LinkChips({w}){const cos=myCos();return html`<span className="row" style=${{gap:4}}>${cos.map(c=>{const l=linkOf(w.id,c);const ban=l&&(l.banned_forever||(l.banned_until&&l.banned_until>=today()));
-  return html`<span key=${c} className=${'lchip '+(ban?'stop':l?W_ST[l.status][0]:'mute')} title=${coName(c)+': '+(ban?'ห้ามทำงาน (LSR)':l?W_ST[l.status][1]:'ยังไม่ขอ')} style=${{'--co':coColor(c)}}>${coShort(c)} ${ban?'⛔':l?l.status==='approved'?'✓':l.status==='pending'?'…':'✕':'–'}</span>`})}</span>`}
+function LinkChips({w}){const cos=myCos();return html`<span className="row" style=${{gap:4}}>${cos.map(c=>{const l=linkOf(w.id,c);const ban=l&&(l.banned_forever||(l.banned_until&&l.banned_until>=today()));const st=wStatus(w,c);
+  return html`<span key=${c} className=${'lchip '+(ban?'stop':st?W_ST[st][0]:'mute')} title=${coName(c)+': '+(ban?'ห้ามทำงาน (LSR)':st?W_ST[st][1]+(st==='lacking'?' ('+approvalMissing(w,c).map(x=>x.t).join(', ')+')':''):'ยังไม่ขอ')} style=${{'--co':coColor(c)}}>${coShort(c)} ${ban?'⛔':st?st==='approved'?'✓':st==='pending'?'…':st==='lacking'?'!':'✕':'–'}</span>`})}</span>`}
 function CTeam(){useStore();const [t,setT]=useState('w');const ws=S.workers.filter(w=>w.contractor_id===ME.contractor_id);const teams=S.teams;const [sel,setSel]=useState([]);const [reqCo,setReqCo]=useState(myCos()[0]||'');
   const users=S.profiles.filter(p=>p.contractor_id===ME.contractor_id);const inv=S.invites.filter(i=>i.contractor_id===ME.contractor_id&&!S.profiles.some(p=>p.email.toLowerCase()===i.email.toLowerCase()));
   return html`<div className="col"><${Tabs} v=${t} set=${setT} opts=${[['w','ช่าง',ws.length,'id'],['t','ทีม',teams.length,'team'],['u','ผู้ใช้แอป',users.length,'user']]}/>
@@ -331,8 +330,9 @@ function WorkerSheet({id}){useStore();const w=byId(S.workers,id);if(!w)return nu
       <${Btn} small=${true} icon="heart" onClick=${()=>UI.open(html`<${SelfdecSheet} id=${id}/>`,'Self-declaration')}>Self-declaration</${Btn}></div>`:null}
     <div className="eyebrow">สถานะกับแต่ละบริษัท SCG</div>
     <div className="col tight">${cos.map(c=>{const l=linkOf(id,c);const ban=l&&(l.banned_forever||(l.banned_until&&l.banned_until>=today()));return html`<div key=${c} className="card pad col tight" style=${{borderLeft:'4px solid '+coColor(c)}}>
-      <div className="between"><b>${coName(c)}</b>${ban?html`<${Chip} c="stop" t=${l.banned_forever?'ห้ามทำงานตลอดชีพ':'ห้ามทำงานถึง '+thD(l.banned_until)}/>`:l?html`<${Chip} c=${W_ST[l.status][0]} t=${W_ST[l.status][1]}/>`:html`<${Chip} t="ยังไม่ขอ"/>`}</div>
+      <div className="between"><b>${coName(c)}</b>${ban?html`<${Chip} c="stop" t=${l.banned_forever?'ห้ามทำงานตลอดชีพ':'ห้ามทำงานถึง '+thD(l.banned_until)}/>`:l?html`<${Chip} c=${W_ST[wStatus(w,c)][0]} t=${W_ST[wStatus(w,c)][1]}/>`:html`<${Chip} t="ยังไม่ขอ"/>`}</div>
       ${l?.note?html`<div className="xs muted">${l.note}</div>`:null}
+      ${l&&l.status!=='rejected'?html`<div className="eyebrow" style=${{marginTop:4}}>คุณสมบัติก่อนเข้าทำงาน</div><${QualList} w=${w} co=${c}/>`:null}
       ${isCAdmin()&&(!l||l.status==='rejected')?html`<${Btn} small=${true} onClick=${()=>act(()=>rpc('request_worker_links',{p_co:c,p_workers:[id]}),'ส่งคำขอแล้ว')}>ขอเข้าทำงานกับ ${coShort(c)}</${Btn}>`:null}
       ${isSCG()&&canApproveWorkers()&&l?html`<${WorkerReview} w=${w} co=${c}/>`:null}</div>`})}</div>
     <div className="eyebrow">ใบรับรองและผลตรวจสุขภาพ</div>

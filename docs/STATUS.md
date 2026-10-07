@@ -14,6 +14,7 @@
 | ทดสอบอีเมลแจ้งเตือนด้วย SQL `select notify(...)` | ⬜ ยังไม่ได้ยืนยันผล |
 | เชื่อม GitHub กับ Claude (แอป Claude ติดตั้งบน scgdistributionsafety · repo SAFEStart · ผู้ร่วมแก้ไข sarayutl) | ✅ 7 ต.ค. |
 | นำโค้ดทั้งหมดเข้า repo + CLAUDE.md | ✅ 7 ต.ค. |
+| Induction เป็นเงื่อนไขก่อนอนุมัติช่าง (backlog ข้อแรก) | 🟡 7 ต.ค. ทำใน Pull Request แล้ว · รอกด Merge + รัน migration `2026-10-07-induction-before-approval.sql` ใน Supabase |
 | LINE OA | ⬜ |
 | แจ้งเตือนบนมือถือ (Push / VAPID) | ⬜ |
 
