@@ -1,0 +1,1 @@
+window.SAFESTART_CONFIG={SUPABASE_URL:'http://localhost:8080',SUPABASE_ANON_KEY:'ANON',LINE_OA_ID:'@safestart',VAPID_PUBLIC_KEY:''};
