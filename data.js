@@ -120,6 +120,21 @@ function workerBlockers(w,co,hazards,on,wah){
     if(!['ok','doctor_ok'].includes(w.selfdec_status)||!w.selfdec_until||w.selfdec_until<on)out.push(['need_doctor','doctor_submitted'].includes(w.selfdec_status)?'รอใบรับรองแพทย์':'Self-declaration หมดอายุ/ยังไม่ทำ')}
   return out;
 }
+/* คุณสมบัติที่ต้องครบก่อนอนุมัติช่าง (ตรงกับ approval_missing ในฐานข้อมูล) → [{t,ok,warn,note}] */
+function approvalChecklist(w,co,on){on=on||today();const out=[{t:'ตรวจตัวบุคคล',ok:!!w.id_verified_at,note:w.id_verified_at?'••'+w.id_last4:'ให้ SCG ตรวจกับบัตรตัวจริง'}];
+  if((sett('rules',co)||{}).enforce_certs!==false)((sett('hazard_certs',co)||{}).all||[]).forEach(c=>{
+    const cs=S.certs.filter(x=>x.worker_id===w.id&&x.cert_type===c);const rv=x=>S.creviews.find(r=>r.cert_id===x.id&&r.scg_company_id===co);const live=x=>!x.expires_on||x.expires_on>=on;
+    const good=cs.filter(x=>live(x)&&rv(x)?.status==='approved').sort((a,b)=>(b.expires_on||'9999')<(a.expires_on||'9999')?-1:1)[0];
+    const left=good&&good.expires_on?Math.round((new Date(good.expires_on)-new Date(on))/864e5):null;
+    out.push({t:certName(c),ok:!!good,warn:left!=null&&left<=30,note:good?(good.expires_on?'ถึง '+thD(good.expires_on)+(left<=30?' · ใกล้หมดอายุ อบรมใหม่ได้เลย':''):'ไม่มีวันหมดอายุ')
+      :!cs.length?'ยังไม่มี · ผู้รับเหมาเพิ่ม cert ในแผ่นข้อมูลช่าง':cs.some(x=>live(x)&&!rv(x))?'รอ SCG ('+coShort(co)+') รับรอง'
+      :cs.some(x=>live(x))?'ไม่ผ่านการตรวจ · เพิ่มใบใหม่':'หมดอายุแล้ว · อบรมใหม่แล้วเพิ่ม cert ใบใหม่'})});
+  return out}
+const approvalMissing=(w,co,on)=>approvalChecklist(w,co,on).filter(x=>!x.ok);
+/* สถานะช่างกับบริษัท co → [สี, ข้อความ] · อนุมัติแล้วแต่คุณสมบัติขาดภายหลัง (เช่น Induction หมดอายุ) = ขาดคุณสมบัติ */
+const W_ST={pending:['warn','รออนุมัติ'],approved:['go','อนุมัติ'],rejected:['stop','ไม่อนุมัติ'],lacking:['stop','ขาดคุณสมบัติ']};
+const wStatus=(w,co)=>{const l=linkOf(w.id,co);return!l?null:l.status==='approved'&&approvalMissing(w,co).length?'lacking':l.status};
+const QualList=({w,co})=>html`<div className="col tight">${approvalChecklist(w,co).map(x=>html`<div key=${x.t} className="between sm"><span className="row" style=${{gap:6}}><span style=${{color:x.ok?(x.warn?'var(--warn)':'var(--go)'):'var(--stop)',display:'inline-flex'}}><${Ic} n=${x.ok?'ok':'x'} s=${16}/></span>${x.t}</span><span className=${'xs '+(x.ok&&!x.warn?'muted':'')} style=${{color:x.ok?(x.warn?'var(--warn)':null):'var(--stop)',textAlign:'right'}}>${x.note}</span></div>`)}</div>`;
 const SELFDEC={none:['mute','ยังไม่ทำ'],ok:['go','ผ่าน'],need_doctor:['stop','ต้องมีใบแพทย์'],doctor_submitted:['warn','รอ Safety รับรอง'],doctor_ok:['go','ผ่าน (มีใบแพทย์)']};
 
 /* หมวดเช็กลิสต์ที่ใช้กับงานนี้ */

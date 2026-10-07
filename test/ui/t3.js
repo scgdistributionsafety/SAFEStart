@@ -13,6 +13,7 @@ const bad=p=>p.errs.filter(e=>!/WebSocket|404/.test(e));
   // Purchasing: ตรวจตัวบุคคล + อนุมัติช่าง
   p=await open(b,2);await p.waitForTimeout(2000);await p.click('.nav >> text=กล่องงาน');await p.waitForTimeout(600);
   await p.click('text=นายบี ขยันดี');await p.waitForTimeout(800);await p.fill('.sheet input[placeholder^="เลขบัตร"]','1101700123456');await p.click('text=ยืนยันตัวบุคคล');await p.waitForTimeout(1000);
+  await p.locator('.sheet .card',{hasText:'อบรมความปลอดภัย SCG (Induction)'}).last().locator('button',{hasText:/^รับรอง$/}).click();await p.waitForTimeout(1000);
   await p.click('text=อนุมัติให้เข้าทำงาน');await p.waitForTimeout(1000);await p.screenshot({path:'/tmp/w/d_worker.png'});console.log('P toast',await p.locator('.toast').innerText().catch(()=>'-'));
   await p.keyboard.press('Escape');await p.click('.nav >> text=ผู้รับเหมา');await p.waitForTimeout(600);await p.fill('input[placeholder^="เลขผู้เสียภาษี"]','0105562000033');await p.click('text=ค้นหา');await p.waitForTimeout(800);await p.screenshot({path:'/tmp/w/d_ctr.png'});
   await p.click('.nav >> text=แผนงาน/PO');await p.waitForTimeout(500);await p.click('text=นำเข้า PO จาก Excel');

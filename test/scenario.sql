@@ -102,6 +102,9 @@ select pg_temp.u(2); set role authenticated;
 select pg_temp.fails($q$select verify_worker_id('d1000000-0000-0000-0000-000000000005','1101700123450',(select id from scg_companies where short='SCGHE'))$q$,'เลขบัตรประชาชนไม่ถูกต้อง');
 select pg_temp.fails($q$select decide_worker((select id from scg_companies where short='SCGHE'),'d1000000-0000-0000-0000-000000000005',true,null)$q$,'ต้องตรวจตัวบุคคลก่อน');
 select verify_worker_id('d1000000-0000-0000-0000-000000000005','1-1017-00123-45-6',(select id from scg_companies where short='SCGHE')) as dup;
+-- Induction ยังไม่รับรอง = อนุมัติไม่ได้
+select pg_temp.fails($q$select decide_worker((select id from scg_companies where short='SCGHE'),'d1000000-0000-0000-0000-000000000005',true,null)$q$,'Induction');
+select review_cert((select id from scg_companies where short='SCGHE'),(select id from worker_certs where worker_id='d1000000-0000-0000-0000-000000000005' and cert_type='induction'),true,null);
 select decide_worker((select id from scg_companies where short='SCGHE'),'d1000000-0000-0000-0000-000000000005',true,null);
 reset role;
 select id_last4, length(id_hash) as hash_len, id_image_path from workers where id='d1000000-0000-0000-0000-000000000005';
@@ -193,6 +196,25 @@ select pg_temp.u(8); set role authenticated;
 select find_contractor('0103561000022')->>'name' as found, jsonb_array_length(find_contractor('0103561000022')->'flags') as flags;
 select register_contractor((select id from scg_companies where short='SCGD'),'x','0103561000022',null,null,null,'PR-9',true) is not null as linked;
 select count(*) as now_sees_premier_workers from workers where contractor_id='c1000000-0000-0000-0000-000000000002';
+reset role;
+
+\echo '19) Induction ใกล้หมดอายุ/หมดอายุ → แจ้งผู้ดูแลบริษัทผู้รับเหมา · หมดแล้ว = ขาดคุณสมบัติ'
+update worker_certs set expires_on=bkk_today()+20 where worker_id='d1000000-0000-0000-0000-000000000001' and cert_type='induction';
+update worker_certs set expires_on=bkk_today()-1 where worker_id='d1000000-0000-0000-0000-000000000002' and cert_type='induction';
+select run_daily('morning')->>'sent' as sent;
+do $$ begin
+  assert exists(select 1 from notifications where kind='cert_due' and to_id='a0000000-0000-0000-0000-000000000005' and title='ช่างขาดคุณสมบัติ: Induction หมดอายุ' and body like '%ใกล้หมด%'), 'ไม่มีแจ้งเตือน Induction';
+  assert (select count(*) from notifications where kind='cert_due' and to_id='a0000000-0000-0000-0000-000000000005')=1, 'แจ้งซ้ำ';
+  assert 'ขาด อบรมความปลอดภัย SCG (Induction)'=any(worker_blockers('d1000000-0000-0000-0000-000000000002',(select id from scg_companies where short='SCGHE'),'{}',bkk_today(),false)), 'หมดอายุแล้วต้องเข้างานไม่ได้';
+  assert cardinality(approval_missing('d1000000-0000-0000-0000-000000000002',(select id from scg_companies where short='SCGHE')))=1;
+  assert cardinality(approval_missing('d1000000-0000-0000-0000-000000000001',(select id from scg_companies where short='SCGHE')))=0;
+end $$;
+select run_daily('morning')->>'sent' as sent_again;
+do $$ begin assert (select count(*) from notifications where kind='cert_due' and to_id='a0000000-0000-0000-0000-000000000005')=1, 'แจ้งซ้ำภายใน 7 วัน'; end $$;
+select title, body from notifications where kind='cert_due' limit 1;
+-- ผู้ใช้ทั่วไปเรียก approval_missing ตรงไม่ได้
+select pg_temp.u(5); set role authenticated;
+select pg_temp.fails($q$select approval_missing('d1000000-0000-0000-0000-000000000001',(select id from scg_companies where short='SCGHE'))$q$,'permission denied');
 reset role;
 
 \echo 'ALL TESTS PASSED'
